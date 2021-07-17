@@ -81,7 +81,7 @@ const C = { GREEN: "\x1b[0;32m", RED: "\x1b[0;31m", NC: "\x1b[0m" }
   const walletsFileName = `wallets.txt`
 
   if (!fs.existsSync(walletsFileName)) {
-    console.log(`Wallets.txt does not exists. Downloading ${C.GREEN}${snapshotUrl}...${C.NC}`)
+    console.log(`Wallets.txt does not exists. Downloading ${C.GREEN}${snapshotUrl}${C.NC}`)
     // Download wallets file / Final Snapshot
     const body = await fetch(snapshotUrl).then(res => res.text())
     // Write to a file
@@ -144,7 +144,7 @@ const C = { GREEN: "\x1b[0;32m", RED: "\x1b[0;31m", NC: "\x1b[0m" }
     return [[...acc, results], current]
   }, [[], 0])(resultChunksP)
 
-  console.log(`Total balance checked: ${C.GREEN}${totalCount}${C.NC}`)
+  console.log(`Total balance checked: ${C.GREEN}${totalCount}${C.NC} / ${wallets.length}`)
 
   // Calculate failed validations
   const failed = resultChunks.flatMap(results => results.filter(([,,, ok]) => !ok))
