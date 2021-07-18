@@ -15,14 +15,14 @@ import * as ps from './rnode-grpc-gen/js/ProposeServiceV1_pb.js'
 const protoSchemaFile = fs.readFileSync('./rnode-grpc-gen/js/pbjs_generated.json', 'utf8')
 const protoSchema     = JSON.parse(protoSchemaFile)
 
-const host = 'observer-eu.services.mainnet.rchain.coop:40401'
+// Old state with last finalized block 908300 / last block before Hard Fork 1
+const host = 'obs-prehf1.services.mainnet.rchain.coop:40401'
 
 const options = { grpcLib: grpc, host, protoSchema }
 
-const { lastFinalizedBlock, exploratoryDeploy } = rnodeDeploy(options)
+const { exploratoryDeploy } = rnodeDeploy(options)
 
 function getBalancesRho(addrList) {
-  // const addrListJson = JSON.stringify(addrList, void 1, 2)
   const addrListJson = JSON.stringify(addrList)
 
   const myRho = `
@@ -60,15 +60,21 @@ function getBalancesRho(addrList) {
 }
 
 const getRhoResult = walletsMap => async function (rhoTerm) {
-  const res = await exploratoryDeploy({term: rhoTerm})
+  const res = await exploratoryDeploy({
+    term: rhoTerm,
+    // Block 908300 https://obs-prehf1.services.mainnet.rchain.coop/api/blocks/908300/908300
+    blockhash: 'db4481ea1d8fe6ffe3fcb92e48539398b91664bd4b3f8f72d15b211e43ac6c69',
+  })
 
   const tuplesPar = res.result.postblockdataList.flatMap(x => x.exprsList.flatMap(x => x.eListBody.psList.flatMap(x => x.exprsList.map(x => x.eTupleBody.psList))))
 
   return tuplesPar.map(x => {
-    const addr = x[0].exprsList[0].gString
-    const rev  = x[1].exprsList[0].gInt
+    const addr    = x[0].exprsList[0].gString
+    const revRaw  = x[1].exprsList[0].gInt
+    const rev     = BigInt(revRaw)
     // Check balance
-    const exportedRev = walletsMap.get(addr)
+    const exportedRevRaw = walletsMap.get(addr)
+    const exportedRev = BigInt(exportedRevRaw)
     const balanceOk = exportedRev === rev
     return [addr, rev, exportedRev, balanceOk]
   })
@@ -94,7 +100,7 @@ const C = { GREEN: "\x1b[0;32m", RED: "\x1b[0;31m", NC: "\x1b[0m" }
   const lineParser       = /^([1-9a-zA-Z]+),([0-9]+)/gm
   const tuplesImported   = walletsFile.matchAll(lineParser)
   const tuplesImportedAr = Array.from(tuplesImported)
-  const wallets          = tuplesImportedAr.map(([_, addr, rev]) => [addr, parseInt(rev)])
+  const wallets          = tuplesImportedAr.map(([_, addr, rev]) => [addr, BigInt(rev)])
   const walletsMap       = new Map(wallets)
   const addresses        = wallets.map(([addr]) => addr)
 
@@ -146,11 +152,19 @@ const C = { GREEN: "\x1b[0;32m", RED: "\x1b[0;31m", NC: "\x1b[0m" }
 
   console.log(`Total balance checked: ${C.GREEN}${totalCount}${C.NC} / ${wallets.length}`)
 
+  // Calculate total REV amount, should be 99999999999999995
+  const totalREV = R.pipe(
+    R.map(([,rev]) => BigInt(rev)),
+    R.reduce((acc, x) => acc + x, BigInt(0)),
+  )(wallets)
+
+  console.log(`Total REV amount: ${C.GREEN}${totalREV}${C.NC}`)
+
   // Calculate failed validations
   const failed = resultChunks.flatMap(results => results.filter(([,,, ok]) => !ok))
 
   if (failed.length === 0) {
-    console.log(`${C.GREEN}REV balance validation completed succesfully!${C.NC}`)
+    console.log(`${C.GREEN}Hard Fork 1 REV balance export validation completed succesfully!${C.NC}`)
   } else {
     console.log(`${C.RED}Check failed for ${failed.length} account(s).${C.NC}`)
     exit(-1)
